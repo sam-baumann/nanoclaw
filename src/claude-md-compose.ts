@@ -120,13 +120,17 @@ export function composeGroupClaudeMd(group: AgentGroup): void {
   for (const name of [...desired.keys()].sort()) {
     imports.push(`@./.claude-fragments/${name}`);
   }
-  const body = [COMPOSED_HEADER, ...imports, ''].join('\n');
-  writeAtomic(path.join(groupDir, 'CLAUDE.md'), body);
 
   const localFile = path.join(groupDir, 'CLAUDE.local.md');
   if (!fs.existsSync(localFile)) {
     fs.writeFileSync(localFile, '');
   }
+  if (fs.statSync(localFile).size > 0) {
+    imports.push('@./CLAUDE.local.md');
+  }
+
+  const body = [COMPOSED_HEADER, ...imports, ''].join('\n');
+  writeAtomic(path.join(groupDir, 'CLAUDE.md'), body);
 }
 
 /**
