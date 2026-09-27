@@ -235,16 +235,21 @@ cd container/agent-runner && bun test      # Container tests (bun:test)
 
 Container typecheck is a separate tsconfig — if you edit `container/agent-runner/src/`, run `pnpm exec tsc -p container/agent-runner/tsconfig.json --noEmit` from root (or `bun run typecheck` from `container/agent-runner/`).
 
-Service management:
+Service management — the service name is **per-checkout**: `nanoclaw-v2-<slug>` (systemd) / `com.nanoclaw-v2-<slug>` (launchd), where `<slug>` is the first 8 hex chars of sha1 of the checkout's absolute path (or `NANOCLAW_INSTALL_ID` if set in `.env`). See `src/install-slug.ts`. Run from the repo root:
+
 ```bash
+SLUG=$(printf %s "$PWD" | sha1sum | cut -c1-8)   # macOS: shasum instead of sha1sum
+
 # macOS (launchd)
-launchctl load   ~/Library/LaunchAgents/com.nanoclaw.plist
-launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
-launchctl kickstart -k gui/$(id -u)/com.nanoclaw  # restart
+launchctl load   ~/Library/LaunchAgents/com.nanoclaw-v2-$SLUG.plist
+launchctl unload ~/Library/LaunchAgents/com.nanoclaw-v2-$SLUG.plist
+launchctl kickstart -k gui/$(id -u)/com.nanoclaw-v2-$SLUG  # restart
 
 # Linux (systemd)
-systemctl --user start|stop|restart nanoclaw
+systemctl --user start|stop|restart nanoclaw-v2-$SLUG
 ```
+
+**Never start, stop, or restart the bare `nanoclaw` / `com.nanoclaw` service.** That name belongs to a v1 install. On a migrated machine it points at the old checkout, and starting it runs a second bot, possibly with a revoked token that retry-loops until the platform bans the host's IP. Before restarting, confirm the unit's `WorkingDirectory` is this checkout (`systemctl --user show nanoclaw-v2-$SLUG -p WorkingDirectory`). After restarting, confirm its `ActiveEnterTimestamp` actually changed.
 
 ## Troubleshooting
 
@@ -330,8 +335,9 @@ grep -q '^INSTALL_CJK_FONTS=' .env && sed -i.bak 's/^INSTALL_CJK_FONTS=.*/INSTAL
 
 # Rebuild and restart so new sessions pick up the new image
 ./container/build.sh
-launchctl kickstart -k gui/$(id -u)/com.nanoclaw   # macOS
-# systemctl --user restart nanoclaw                # Linux
+SLUG=$(printf %s "$PWD" | sha1sum | cut -c1-8)             # see "Service management"
+launchctl kickstart -k gui/$(id -u)/com.nanoclaw-v2-$SLUG   # macOS
+# systemctl --user restart nanoclaw-v2-$SLUG                # Linux
 ```
 
 `container/build.sh` reads `INSTALL_CJK_FONTS` from `.env` and passes it through as a Docker build-arg. Without CJK fonts, Chromium-rendered screenshots and PDFs containing CJK text show tofu (empty rectangles) instead of characters.

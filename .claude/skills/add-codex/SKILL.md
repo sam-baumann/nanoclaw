@@ -159,7 +159,8 @@ On yes — set it, then restart the host so it takes effect:
 
 ```bash
 pnpm exec tsx setup/index.ts --step set-env -- --key DEFAULT_AGENT_PROVIDER --value codex
-launchctl kickstart -k gui/$(id -u)/com.nanoclaw   # macOS; Linux: systemctl --user restart nanoclaw
+SLUG=$(printf %s "$PWD" | sha1sum | cut -c1-8)             # per-checkout service name; see CLAUDE.md
+launchctl kickstart -k gui/$(id -u)/com.nanoclaw-v2-$SLUG   # macOS; Linux: systemctl --user restart nanoclaw-v2-$SLUG
 ```
 
 This affects only groups created afterward. Per-group `ncl groups config update --provider` still overrides the default in either direction. Creation itself stays provider-agnostic (no `--provider` flag — provider is a DB property stamped from the instance default at creation).

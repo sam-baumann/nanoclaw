@@ -16,10 +16,11 @@ Rebuild and restart agent containers so they load the updated MCP tool list and 
 
 ```bash
 ./container/build.sh
-launchctl kickstart -k gui/$(id -u)/com.nanoclaw
+SLUG=$(printf %s "$PWD" | sha1sum | cut -c1-8)   # per-checkout service name; see CLAUDE.md
+launchctl kickstart -k gui/$(id -u)/com.nanoclaw-v2-$SLUG
 ```
 
-On Linux, restart with `systemctl --user restart nanoclaw`.
+On Linux, restart with `systemctl --user restart nanoclaw-v2-$SLUG`.
 
 Use:
 
