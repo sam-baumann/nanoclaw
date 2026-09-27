@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Adapter, AdapterPostableMessage, RawMessage } from 'chat';
 
-import { createChatSdkBridge, splitForLimit } from './chat-sdk-bridge.js';
+import { createChatSdkBridge, parseNcqCustomId, splitForLimit } from './chat-sdk-bridge.js';
 
 vi.mock('../webhook-server.js', () => ({
   registerWebhookAdapter: vi.fn(),
@@ -656,4 +656,22 @@ it('forwards the authenticated instance and message address without editing a de
     await bridge.teardown();
     await closeDb();
   }
+});
+
+describe('parseNcqCustomId', () => {
+  it('drops the value half @chat-adapter/discord appends to custom_id', () => {
+    // encodeDiscordCustomId(id, value) === `${id}\n${value}`
+    expect(parseNcqCustomId('ncq:appr-1-abc:0\n0')).toEqual({ questionId: 'appr-1-abc', tail: '0' });
+    expect(parseNcqCustomId('ncq:appr-1-abc:1\n1')).toEqual({ questionId: 'appr-1-abc', tail: '1' });
+  });
+
+  it('parses custom_ids with no value half', () => {
+    expect(parseNcqCustomId('ncq:q1:approve')).toEqual({ questionId: 'q1', tail: 'approve' });
+  });
+
+  it('rejects non-question custom_ids', () => {
+    expect(parseNcqCustomId(undefined)).toBeUndefined();
+    expect(parseNcqCustomId('other:q1:0')).toBeUndefined();
+    expect(parseNcqCustomId('ncq:q1')).toBeUndefined();
+  });
 });

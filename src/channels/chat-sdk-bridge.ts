@@ -400,6 +400,20 @@ function resolveSelectedOption(
   return candidate;
 }
 
+/**
+ * Split a raw Discord component custom_id into its question id and option
+ * tail. @chat-adapter/discord encodes custom_id as `<actionId>\n<value>`, so
+ * the value half is dropped first — otherwise the tail reads "0\n0", fails the
+ * index decode, and every button resolves as a non-approve value.
+ */
+export function parseNcqCustomId(customId: string | undefined): { questionId: string; tail: string } | undefined {
+  if (!customId?.startsWith('ncq:')) return undefined;
+  const actionId = customId.split('\n', 1)[0];
+  const colonIdx = actionId.indexOf(':', 4); // after "ncq:"
+  if (colonIdx === -1) return undefined;
+  return { questionId: actionId.slice(4, colonIdx), tail: actionId.slice(colonIdx + 1) };
+}
+
 interface TerminalApprovalCard {
   title: string;
   question: string;
@@ -1104,15 +1118,7 @@ async function handleForwardedEvent(
       const interactionToken = interaction.token as string;
 
       // Parse the selected option from custom_id
-      let questionId: string | undefined;
-      let tail: string | undefined;
-      if (customId?.startsWith('ncq:')) {
-        const colonIdx = customId.indexOf(':', 4); // after "ncq:"
-        if (colonIdx !== -1) {
-          questionId = customId.slice(4, colonIdx);
-          tail = customId.slice(colonIdx + 1);
-        }
-      }
+      const { questionId, tail } = parseNcqCustomId(customId) ?? {};
 
       // Update the card to show the selected answer and remove buttons
       const originalEmbeds =
