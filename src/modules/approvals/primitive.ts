@@ -21,6 +21,7 @@
  * exposing just user-roles/user-dms) is more churn than it's worth. Revisit
  * if either module becomes genuinely optional (see REFACTOR_PLAN open q #3).
  */
+import { APPROVAL_MESSAGING_GROUP_ID } from '../../config.js';
 import { normalizeOptions, type RawOption } from '../../channels/ask-question.js';
 import { getMessagingGroup } from '../../db/messaging-groups.js';
 import { createPendingApproval, deletePendingApproval, getSession } from '../../db/sessions.js';
@@ -162,12 +163,26 @@ export async function pickApprover(agentGroupId: string | null): Promise<string[
  * Tie-break: prefer approvers reachable on the same channel kind as the
  * origin; else first in list. A same-channel origin resolves through its
  * exact adapter instance.
+ *
+ * When NANOCLAW_APPROVAL_MESSAGING_GROUP names a messaging group, the card is
+ * posted there instead, addressed to the first approver on that group's
+ * channel kind. Falls back to DMs if the group is missing or no approver
+ * shares its channel kind.
  */
 export async function pickApprovalDelivery(
   approvers: string[],
   originChannelType: string,
   originInstance?: string,
 ): Promise<{ userId: string; messagingGroup: MessagingGroup } | null> {
+  if (APPROVAL_MESSAGING_GROUP_ID) {
+    const shared = await getMessagingGroup(APPROVAL_MESSAGING_GROUP_ID);
+    const userId = shared && approvers.find((id) => channelTypeOf(id) === shared.channel_type);
+    if (shared && userId) return { userId, messagingGroup: shared };
+    log.warn('Approval messaging group unusable, falling back to DM', {
+      messagingGroupId: APPROVAL_MESSAGING_GROUP_ID,
+      found: Boolean(shared),
+    });
+  }
   if (originChannelType) {
     for (const userId of approvers) {
       if (channelTypeOf(userId) !== originChannelType) continue;

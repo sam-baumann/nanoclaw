@@ -3,7 +3,18 @@
  * half of what used to live in src/access.ts. Moved here in PR #7 alongside
  * the approvals re-tier.
  */
-import { beforeEach, afterEach, describe, expect, it } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+
+const cfg = vi.hoisted(() => ({ approvalMg: '' }));
+vi.mock('../../config.js', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('../../config.js');
+  return {
+    ...actual,
+    get APPROVAL_MESSAGING_GROUP_ID() {
+      return cfg.approvalMg;
+    },
+  };
+});
 
 import type { ChannelAdapter, OutboundMessage } from '../../channels/adapter.js';
 import {
@@ -11,6 +22,7 @@ import {
   registerChannelAdapter,
   teardownChannelAdapters,
 } from '../../channels/channel-registry.js';
+import { createMessagingGroup } from '../../db/messaging-groups.js';
 import { closeDb, createAgentGroup, initTestDb, runMigrations } from '../../db/index.js';
 import { createUser } from '../permissions/db/users.js';
 import { grantRole } from '../permissions/db/user-roles.js';
@@ -26,6 +38,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  cfg.approvalMg = '';
   await teardownChannelAdapters();
   await closeDb();
 });
@@ -159,5 +172,48 @@ describe('pickApprovalDelivery', () => {
     expect(exact?.messagingGroup.instance).toBe('slack-secondary');
     expect(primary.openDMCalls).toEqual(['admin']);
     expect(secondary.openDMCalls).toEqual(['admin']);
+  });
+
+  describe('with NANOCLAW_APPROVAL_MESSAGING_GROUP set', () => {
+    beforeEach(async () => {
+      await createMessagingGroup({
+        id: 'mg-general',
+        channel_type: 'discord',
+        platform_id: 'discord:guild:general',
+        name: 'general',
+        is_group: 1,
+        unknown_sender_policy: 'strict',
+        created_at: now(),
+      });
+      cfg.approvalMg = 'mg-general';
+    });
+
+    it('posts to the shared group, addressed to the first approver on its channel kind', async () => {
+      const discord = await mountMockAdapter('discord', async (h) => `dm-${h}`);
+      await seedUser('telegram:111', 'telegram');
+      await seedUser('discord:222', 'discord');
+
+      const result = await pickApprovalDelivery(['telegram:111', 'discord:222'], 'telegram');
+      expect(result?.userId).toBe('discord:222');
+      expect(result?.messagingGroup.id).toBe('mg-general');
+      expect(discord.openDMCalls).toEqual([]);
+    });
+
+    it('falls back to DMs when no approver shares the group channel kind', async () => {
+      await mountMockAdapter('telegram');
+      await seedUser('telegram:111', 'telegram');
+
+      const result = await pickApprovalDelivery(['telegram:111'], 'telegram');
+      expect(result?.messagingGroup.platform_id).toBe('111');
+    });
+
+    it('falls back to DMs when the configured group does not exist', async () => {
+      cfg.approvalMg = 'mg-missing';
+      await mountMockAdapter('telegram');
+      await seedUser('telegram:111', 'telegram');
+
+      const result = await pickApprovalDelivery(['telegram:111'], 'telegram');
+      expect(result?.messagingGroup.platform_id).toBe('111');
+    });
   });
 });

@@ -215,6 +215,20 @@ describe('reject with reason', () => {
     expect(consumed).toBe(false);
   });
 
+  it('in a shared channel, only the clicking approver supplies the reason', async () => {
+    const { captureReasonReply } = await import('./reason-capture.js');
+    await seedApproval('appr-6');
+    await clickRejectWithReason('appr-6');
+
+    const bystander = dmReply('unrelated chatter');
+    bystander.message.content = JSON.stringify({ text: 'unrelated chatter', senderId: 'someone-else' });
+    expect(await captureReasonReply(bystander)).toBe(false);
+    expect((await getPendingApproval('appr-6'))?.status).toBe('awaiting_reason');
+
+    expect(await captureReasonReply(dmReply('not now'))).toBe(true);
+    expect(lastRelayedText()).toBe('Your create_agent request was rejected by admin: "not now"');
+  });
+
   it('ignores DMs on channels with no armed reason capture', async () => {
     const { captureReasonReply } = await import('./reason-capture.js');
     const consumed = await captureReasonReply({

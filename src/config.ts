@@ -19,6 +19,7 @@ const envConfig = readEnvFile([
   'NANOCLAW_EGRESS_LOCKDOWN',
   'NANOCLAW_EGRESS_NETWORK',
   'WEBHOOK_PORT',
+  'NANOCLAW_APPROVAL_MESSAGING_GROUP',
 ]);
 
 /**
@@ -106,6 +107,12 @@ export const CONTAINER_PIDS_LIMIT = process.env.CONTAINER_PIDS_LIMIT ?? envConfi
 export const EGRESS_LOCKDOWN = (process.env.NANOCLAW_EGRESS_LOCKDOWN || envConfig.NANOCLAW_EGRESS_LOCKDOWN) === 'true';
 export const EGRESS_NETWORK =
   process.env.NANOCLAW_EGRESS_NETWORK || envConfig.NANOCLAW_EGRESS_NETWORK || 'nanoclaw-egress';
+
+// Messaging group (id) that approval cards are posted to instead of the
+// approver's DM. Unset = DM the approver (default). The card still names one
+// approver, and only that user's click resolves it.
+export const APPROVAL_MESSAGING_GROUP_ID =
+  process.env.NANOCLAW_APPROVAL_MESSAGING_GROUP || envConfig.NANOCLAW_APPROVAL_MESSAGING_GROUP || '';
 
 // Resolve when the listener starts so a late process override still wins.
 export function getWebhookPort(): number {

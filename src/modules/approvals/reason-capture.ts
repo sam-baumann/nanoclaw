@@ -66,6 +66,23 @@ function clampReason(raw: string): string {
   return trimmed.slice(0, MAX_REASON_LEN - 1) + '…';
 }
 
+/** Namespaced sender id, parsed the same way as the permissions sender resolver. */
+function senderOf(event: InboundEvent): string | null {
+  try {
+    const c = JSON.parse(event.message.content) as Record<string, unknown>;
+    const author =
+      typeof c.author === 'object' && c.author !== null ? (c.author as Record<string, unknown>) : undefined;
+    const raw =
+      (typeof c.senderId === 'string' ? c.senderId : undefined) ??
+      (typeof c.sender === 'string' ? c.sender : undefined) ??
+      (typeof author?.userId === 'string' ? author.userId : undefined);
+    if (!raw) return null;
+    return raw.includes(':') ? raw : `${event.channelType}:${raw}`;
+  } catch {
+    return null;
+  }
+}
+
 function extractText(event: InboundEvent): string {
   try {
     const parsed = JSON.parse(event.message.content) as Record<string, unknown>;
@@ -136,6 +153,11 @@ export async function captureReasonReply(event: InboundEvent): Promise<boolean> 
   const key = dmKey(event.channelType, event.platformId, event.instance);
   const arming = awaitingReason.get(key);
   if (!arming) return false;
+  // The card may live in a shared channel (NANOCLAW_APPROVAL_MESSAGING_GROUP);
+  // only the approver who clicked supplies the reason — anyone else's message
+  // routes normally and leaves the capture armed.
+  const sender = senderOf(event);
+  if (sender && sender !== arming.userId) return false;
 
   // This DM is an armed reason channel — disarm regardless of outcome.
   awaitingReason.delete(key);
